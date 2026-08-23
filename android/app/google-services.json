@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "735930204883",
+    "project_id": "tareapp-428f4",
+    "storage_bucket": "tareapp-428f4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:735930204883:android:318963655025c6693c8a26",
+        "android_client_info": {
+          "package_name": "com.example.tareapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "735930204883-u6ea4736m9vv5ctd2b0l8vj2q3iselep.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGOsaTM5sw_nUEl3iDBLVZ76b6CFdovZc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "735930204883-u6ea4736m9vv5ctd2b0l8vj2q3iselep.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "735930204883-oahv6t5uqrpgs4bbl78kvnveormp7bsc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.tareapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
