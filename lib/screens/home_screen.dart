@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/materia.dart';
 import '../services/db_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/notification_bell_button.dart';
 import 'materia_detail_screen.dart';
 import 'crear_materia_screen.dart';
 
@@ -26,15 +28,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color _colorPromedio(Materia m) {
-    if (m.esImposibleGanar()) return Colors.red;
-    if (m.promedioActual < m.notaAprobacion) return Colors.orange;
-    return Colors.green;
+    if (m.esImposibleGanar()) return AppColors.maroon;
+    if (m.promedioActual < m.notaAprobacion) return AppColors.gold;
+    return Colors.green.shade700;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mis materias')),
+      appBar: AppBar(
+        title: const Text('Mis materias'),
+        actions: const [NotificationBellButton(), SizedBox(width: 8)],
+      ),
       body: _materias.isEmpty
           ? const Center(
               child: Text('Todavía no has agregado ninguna materia.\n'

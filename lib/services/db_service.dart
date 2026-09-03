@@ -20,7 +20,7 @@ class DBService {
     final path = join(dbPath, 'tareapp.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE materias (
@@ -39,6 +39,17 @@ class DBService {
             fechaEntrega TEXT NOT NULL,
             completada INTEGER NOT NULL,
             FOREIGN KEY (materiaId) REFERENCES materias (id)
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE notificaciones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL,
+            titulo TEXT NOT NULL,
+            cuerpo TEXT NOT NULL,
+            creadoEn TEXT NOT NULL,
+            leida INTEGER NOT NULL DEFAULT 0,
+            claveUnica TEXT NOT NULL UNIQUE
           )
         ''');
       },
@@ -63,6 +74,21 @@ class DBService {
           // sin borrar nada — solo se agrega la columna nueva, vacía
           // para las tareas que ya existían.
           await db.execute("ALTER TABLE tareas ADD COLUMN descripcion TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 4) {
+          // Tabla nueva para la bandeja de notificaciones — no afecta
+          // nada de lo que ya existía.
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS notificaciones (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              tipo TEXT NOT NULL,
+              titulo TEXT NOT NULL,
+              cuerpo TEXT NOT NULL,
+              creadoEn TEXT NOT NULL,
+              leida INTEGER NOT NULL DEFAULT 0,
+              claveUnica TEXT NOT NULL UNIQUE
+            )
+          ''');
         }
       },
     );

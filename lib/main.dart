@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,6 +10,8 @@ import 'services/auth_service.dart';
 import 'services/grupo_service.dart';
 import 'services/tarea_grupo_service.dart';
 import 'services/push_service.dart';
+import 'services/notificacion_log_service.dart';
+import 'theme/app_theme.dart';
 import 'models/tarea.dart';
 import 'screens/home_screen.dart';
 import 'screens/tareas_screen.dart';
@@ -63,16 +66,8 @@ class TareApp extends StatelessWidget {
           title: 'TareApp',
           debugShowCheckedModeBanner: false,
           themeMode: modo,
-          theme: ThemeData(
-            colorSchemeSeed: Colors.indigo,
-            brightness: Brightness.light,
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorSchemeSeed: Colors.indigo,
-            brightness: Brightness.dark,
-            useMaterial3: true,
-          ),
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
           home: StreamBuilder<User?>(
             stream: AuthService.instance.authStateChanges,
             builder: (context, snapshot) {
@@ -113,17 +108,18 @@ class _MainNavState extends State<MainNav> {
   @override
   void initState() {
     super.initState();
-    // Respaldo por si las notificaciones en segundo plano fallan (pasa
-    // en algunos celulares que restringen mucho las apps de terceros):
-    // apenas se abre la app, avisamos si hay tareas urgentes.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _mostrarAvisoLegal();
-      try {
-        await PushService.instance.init();
-      } catch (e) {
-        debugPrint('No se pudo inicializar PushService: $e');
-      }
-      await _revisarTareasUrgentes();
+      // El aviso de tareas LOCALES sale de inmediato (solo necesita
+      // la base de datos del celular, no depende de internet).
+      await _revisarTareasUrgentesLocales();
+
+      // Todo lo relacionado al GRUPO (que sí necesita Firestore) se
+      // hace en segundo plano, sin bloquear nada — los resultados
+      // quedan en la bandeja de notificaciones (🔔) para revisar
+      // cuando quieras, en vez de otro aviso emergente que demoraría
+      // la app cada vez que abres.
+      unawaited(_sincronizarGrupoEnSegundoPlano());
     });
   }
 
@@ -147,8 +143,7 @@ class _MainNavState extends State<MainNav> {
     );
   }
 
-  Future<void> _revisarTareasUrgentes() async {
-    // --- Tareas locales (personales) ---
+  Future<void> _revisarTareasUrgentesLocales() async {
     final tareas = await DBService.instance.obtenerTareas();
     final materias = await DBService.instance.obtenerMaterias();
     final materiasPorId = {for (var m in materias) m.id!: m};
@@ -161,55 +156,7 @@ class _MainNavState extends State<MainNav> {
             area: materiasPorId[t.materiaId]?.nombre ?? '',
             diasRestantes: t.diasRestantes,
           ),
-    ];
-
-    // --- Tareas del grupo (si pertenezco a uno) ---
-    // Aprovechamos este mismo momento (apertura de la app) para
-    // sincronizar los recordatorios locales de cada tarea del grupo,
-    // ya que no hay servidor que empuje notificaciones automáticamente.
-    try {
-      final grupo = await GrupoService.instance.obtenerMiGrupo();
-      if (grupo != null) {
-        final tareasGrupo = await TareaGrupoService.instance.obtenerTareasUnaVez(grupo.codigo);
-        for (final tg in tareasGrupo) {
-          final yaCompleti = await TareaGrupoService.instance.yoCompleteEsta(grupo.codigo, tg.id);
-          if (yaCompleti) continue;
-
-          try {
-            await NotificationService.instance.programarRecordatorioGrupo(
-              tareaIdFirestore: tg.id,
-              titulo: tg.titulo,
-              area: tg.area,
-              fechaEntrega: tg.fechaEntrega,
-              horasAntes: 24,
-            );
-            await NotificationService.instance.programarRecordatorioGrupo(
-              tareaIdFirestore: tg.id,
-              titulo: tg.titulo,
-              area: tg.area,
-              fechaEntrega: tg.fechaEntrega,
-              horasAntes: 2,
-            );
-          } catch (e) {
-            debugPrint('No se pudo programar recordatorio de tarea de grupo: $e');
-          }
-
-          if (tg.diasRestantes <= 3) {
-            items.add(_ItemUrgente(
-              titulo: tg.titulo,
-              area: '${tg.area} · grupo',
-              diasRestantes: tg.diasRestantes,
-            ));
-          }
-        }
-      }
-    } catch (e) {
-      // Sin internet o algún fallo con Firestore: no bloqueamos el
-      // aviso de tareas locales por esto, simplemente lo omitimos.
-      debugPrint('No se pudieron sincronizar tareas del grupo: $e');
-    }
-
-    items.sort((a, b) => a.diasRestantes.compareTo(b.diasRestantes));
+    ]..sort((a, b) => a.diasRestantes.compareTo(b.diasRestantes));
 
     if (items.isEmpty || !mounted) return;
 
@@ -242,6 +189,86 @@ class _MainNavState extends State<MainNav> {
         ],
       ),
     );
+  }
+
+  /// Todo lo que depende de Firestore (notificaciones push, tareas del
+  /// grupo) corre aquí, en segundo plano, SIN bloquear la interfaz.
+  /// En vez de mostrar otro diálogo emergente (que sería lo que hacía
+  /// lenta la apertura de la app), cada cosa relevante se registra en
+  /// la bandeja de notificaciones para revisar con calma.
+  Future<void> _sincronizarGrupoEnSegundoPlano() async {
+    try {
+      await PushService.instance.init();
+    } catch (e) {
+      debugPrint('No se pudo inicializar PushService: $e');
+    }
+
+    try {
+      final grupo = await GrupoService.instance.obtenerMiGrupo();
+      if (grupo == null) return;
+
+      final tareasGrupo = await TareaGrupoService.instance.obtenerTareasUnaVez(grupo.codigo);
+
+      // Se procesan en paralelo (no una por una) para que termine rápido.
+      await Future.wait(tareasGrupo.map((tg) async {
+        final yaCompleti = await TareaGrupoService.instance.yoCompleteEsta(grupo.codigo, tg.id);
+        if (yaCompleti) return;
+
+        final hoy = DateTime.now().toIso8601String().substring(0, 10);
+
+        // ¿Es una tarea recién publicada? (hace menos de un día, y no
+        // fue creada por mí mismo si soy profesor)
+        if (tg.creadoPor != FirebaseAuth.instance.currentUser?.uid) {
+          try {
+            await NotificacionLogService.instance.registrar(
+              tipo: 'nueva_tarea',
+              titulo: '${tg.area}: ${tg.titulo}',
+              cuerpo: 'Tarea publicada en el grupo',
+              claveUnica: 'nueva:${tg.id}',
+            );
+          } catch (_) {}
+        }
+
+        if (tg.diasRestantes <= 3) {
+          final texto = tg.diasRestantes < 0
+              ? 'Venció'
+              : tg.diasRestantes == 0
+                  ? 'Vence hoy'
+                  : tg.diasRestantes == 1
+                      ? 'Vence mañana'
+                      : 'Vence en ${tg.diasRestantes} días';
+          try {
+            await NotificacionLogService.instance.registrar(
+              tipo: 'urgente',
+              titulo: '${tg.area}: ${tg.titulo}',
+              cuerpo: '$texto · grupo',
+              claveUnica: 'urgente:grupo:${tg.id}:$hoy',
+            );
+          } catch (_) {}
+        }
+
+        try {
+          await NotificationService.instance.programarRecordatorioGrupo(
+            tareaIdFirestore: tg.id,
+            titulo: tg.titulo,
+            area: tg.area,
+            fechaEntrega: tg.fechaEntrega,
+            horasAntes: 24,
+          );
+          await NotificationService.instance.programarRecordatorioGrupo(
+            tareaIdFirestore: tg.id,
+            titulo: tg.titulo,
+            area: tg.area,
+            fechaEntrega: tg.fechaEntrega,
+            horasAntes: 2,
+          );
+        } catch (e) {
+          debugPrint('No se pudo programar recordatorio de tarea de grupo: $e');
+        }
+      }));
+    } catch (e) {
+      debugPrint('No se pudieron sincronizar tareas del grupo: $e');
+    }
   }
 
   @override

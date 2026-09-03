@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_service.dart';
+import 'notificacion_log_service.dart';
 
 /// Maneja las notificaciones PUSH reales (enviadas por un servidor),
 /// a diferencia de notification_service.dart que solo programa avisos
@@ -38,6 +39,18 @@ class PushService {
         NotificationService.instance.mostrarNotificacionInstantanea(
           titulo: notificacion.title ?? 'TareApp',
           cuerpo: notificacion.body ?? '',
+        );
+
+        // También lo dejamos guardado en la bandeja, para que quede
+        // aunque la persona no haya visto la notificación del sistema
+        // a tiempo. Se clasifica por el texto del título, ya que
+        // nuestro propio servidor arma los títulos de forma predecible.
+        final esNueva = (notificacion.title ?? '').toLowerCase().contains('nueva tarea');
+        NotificacionLogService.instance.registrar(
+          tipo: esNueva ? 'nueva_tarea' : 'urgente',
+          titulo: notificacion.title ?? 'TareApp',
+          cuerpo: notificacion.body ?? '',
+          claveUnica: 'push:${mensaje.messageId ?? DateTime.now().millisecondsSinceEpoch}',
         );
       }
     });

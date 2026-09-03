@@ -4,6 +4,7 @@ import '../services/settings_service.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../main.dart';
+import '../widgets/notification_bell_button.dart';
 
 class AjustesScreen extends StatefulWidget {
   const AjustesScreen({super.key});
@@ -155,7 +156,10 @@ class _AjustesScreenState extends State<AjustesScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ajustes')),
+      appBar: AppBar(
+        title: const Text('Ajustes'),
+        actions: const [NotificationBellButton(), SizedBox(width: 8)],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
