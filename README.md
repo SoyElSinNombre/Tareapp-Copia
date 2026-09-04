@@ -33,6 +33,9 @@ Nació de un problema real de salón: los compañeros olvidaban constantemente s
 - En vez de depender de que el celular "se recuerde solo" (poco confiable en varios fabricantes que matan apps en segundo plano), un servidor externo gratuito envía las notificaciones — ver [TareApp-Notificaciones](https://github.com/SoyElSinNombre/Tareapp-notificaciones)
 - Bandeja de notificaciones dentro de la app, separada en "Nuevas tareas" y "Urgentes"
 
+## Capturas
+feature_graphic.png
+
 ## Stack técnico
 
 | Parte | Tecnología |
