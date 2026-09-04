@@ -34,7 +34,7 @@ Nació de un problema real de salón: los compañeros olvidaban constantemente s
 - Bandeja de notificaciones dentro de la app, separada en "Nuevas tareas" y "Urgentes"
 
 ## Capturas
-![Captura 1](main/feature_graphic.png)
+![Captura 1](feature_graphic.png)
 
 ## Stack técnico
 
